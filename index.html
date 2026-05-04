@@ -394,7 +394,7 @@
                 <p>Importados de USA - Segunda mano de calidad</p>
                 <p style="margin-top:1rem">
                     <a href="https://wa.me/59175801814" target="_blank">📱 WhatsApp: +591 75801814</a>
-                    <a href="mailto:croriginalsweb@gmail.com">📧 croriginalsweb@gmail.com</a>
+                    <a href="/cdn-cgi/l/email-protection#bddecfd2cfd4dad4d3dcd1cecad8dffddad0dcd4d193ded2d0">📧 <span class="__cf_email__" data-cfemail="abc8d9c4d9c2ccc2c5cac7d8dccec9ebccc6cac2c785c8c4c6">[email&#160;protected]</span></a>
                 </p>
             </div>
             <div class="footer-section">
@@ -460,13 +460,13 @@
 
     <!-- Toast -->
     <div class="toast" id="toast"></div>
-    <script>
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
         // ============================================
         // CONFIGURACIÓN
         // ============================================
         const CONFIG = {
             WHATSAPP_NUMBER: "59175801814",
-            SHEETS_URL: "", // Dejar vacío para usar datos demo
+            SHEETS_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRquEB_6iO7TMO0C6_6e-PcWKB9UUC2PuYFeHTd9jp-wdKZ97wVWpprllGwM5Ov2PtZ0kTtGU0CJC64/pub?output=csv",
             CURRENCY: "Bs",
             FREE_SHIPPING: ["El Alto", "La Paz"],
             HOURS: "14:00 - 00:00"
@@ -851,17 +851,88 @@
         }
 
         // ============================================
-        // GOOGLE SHEETS INTEGRATION (para futuro)
+        // GOOGLE SHEETS INTEGRATION
         // ============================================
+        // Parser CSV robusto: respeta comas dentro de comillas y comillas escapadas ("")
+        function parseCSV(text) {
+            const rows = [];
+            let row = [];
+            let field = '';
+            let inQuotes = false;
+            // Normalizar saltos de línea
+            text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+            for (let i = 0; i < text.length; i++) {
+                const c = text[i];
+                if (inQuotes) {
+                    if (c === '"') {
+                        if (text[i + 1] === '"') { field += '"'; i++; }
+                        else { inQuotes = false; }
+                    } else {
+                        field += c;
+                    }
+                } else {
+                    if (c === '"') {
+                        inQuotes = true;
+                    } else if (c === ',') {
+                        row.push(field); field = '';
+                    } else if (c === '\n') {
+                        row.push(field); field = '';
+                        rows.push(row); row = [];
+                    } else {
+                        field += c;
+                    }
+                }
+            }
+            // Última celda / fila
+            if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+
+            // Eliminar filas totalmente vacías
+            return rows.filter(r => r.some(c => c && c.trim() !== ''));
+        }
+
+        function csvToProducts(csv) {
+            const rows = parseCSV(csv);
+            if (rows.length < 2) return [];
+            const headers = rows[0].map(h => h.trim().toLowerCase());
+            const out = [];
+            for (let i = 1; i < rows.length; i++) {
+                const r = rows[i];
+                const obj = {};
+                headers.forEach((h, idx) => { obj[h] = (r[idx] !== undefined ? String(r[idx]).trim() : ''); });
+                if (!obj.id && !obj.name) continue;
+                out.push({
+                    id: parseInt(obj.id, 10) || (i),
+                    name: obj.name || 'Producto sin nombre',
+                    category: (obj.category || 'zapatos').toLowerCase(),
+                    brand: obj.brand || '',
+                    size: obj.size || '',
+                    color: obj.color || '',
+                    price: parseFloat(String(obj.price).replace(/[^0-9.\-]/g, '')) || 0,
+                    stock: parseInt(obj.stock, 10) || 0,
+                    image: obj.image || 'https://via.placeholder.com/400x300?text=CR+Originals',
+                    description: obj.description || '',
+                    condition: obj.condition || ''
+                });
+            }
+            return out;
+        }
+
         async function loadFromSheets() {
             try {
-                // Sheets publicados como CSV
-                const response = await fetch(CONFIG.SHEETS_URL);
+                const response = await fetch(CONFIG.SHEETS_URL, { cache: 'no-store' });
+                if (!response.ok) throw new Error('HTTP ' + response.status);
                 const csv = await response.text();
-                // Parsear CSV y actualizar products
-                console.log('Datos cargados desde Sheets');
+                const parsed = csvToProducts(csv);
+                if (parsed.length > 0) {
+                    products = parsed;
+                    renderProducts();
+                    console.log('✅ Productos cargados desde Google Sheets:', products.length);
+                } else {
+                    console.warn('⚠️ Sheets vacío o sin datos válidos. Usando datos demo.');
+                }
             } catch (e) {
-                console.log('Usando datos demo');
+                console.error('❌ Error al cargar Sheets, usando datos demo:', e);
             }
         }
 
@@ -885,5 +956,6 @@
             });
         });
     </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
