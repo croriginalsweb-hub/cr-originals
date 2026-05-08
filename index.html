@@ -290,12 +290,8 @@
                     <button class="tab-btn" onclick="filterCategory('ropa')">👕 Ropa</button>
                 </div>
             </div>
-
-            <div class="coupon-banner" id="couponBanner" style="display:none">
-                <div class="coupon-banner-text">
-                    🎉 ¡Llevas <span id="couponCount">0</span> compras! A la 6ª obtén <span>25% de descuento</span>
-                </div>
-            </div>
+            <!-- Cupón eliminado: no hay backend para validar compras reales -->
+</div>
 
             <div class="filters">
                 <div class="filter-group">
@@ -394,7 +390,7 @@
                 <p>Importados de USA - Segunda mano de calidad</p>
                 <p style="margin-top:1rem">
                     <a href="https://wa.me/59175801814" target="_blank">📱 WhatsApp: +591 75801814</a>
-                    <a href="/cdn-cgi/l/email-protection#bddecfd2cfd4dad4d3dcd1cecad8dffddad0dcd4d193ded2d0">📧 <span class="__cf_email__" data-cfemail="abc8d9c4d9c2ccc2c5cac7d8dccec9ebccc6cac2c785c8c4c6">[email&#160;protected]</span></a>
+                    <a href="mailto:croriginalsweb@gmail.com">📧 croriginalsweb@gmail.com</a>
                 </p>
             </div>
             <div class="footer-section">
@@ -460,13 +456,13 @@
 
     <!-- Toast -->
     <div class="toast" id="toast"></div>
-    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+    <script>
         // ============================================
         // CONFIGURACIÓN
         // ============================================
         const CONFIG = {
             WHATSAPP_NUMBER: "59175801814",
-            SHEETS_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRquEB_6iO7TMO0C6_6e-PcWKB9UUC2PuYFeHTd9jp-wdKZ97wVWpprllGwM5Ov2PtZ0kTtGU0CJC64/pub?output=csv",
+            SHEETS_URL: "", // Dejar vacío para usar datos demo
             CURRENCY: "Bs",
             FREE_SHIPPING: ["El Alto", "La Paz"],
             HOURS: "14:00 - 00:00"
@@ -526,7 +522,7 @@
         let cart = JSON.parse(localStorage.getItem('cr_cart')) || [];
         let currentCategory = 'all';
         let currentFilters = { talla: '', min: '', max: '', marca: '' };
-        let purchaseHistory = JSON.parse(localStorage.getItem('cr_purchases')) || [];
+        // Sistema de cupones eliminado: no hay backend para validar compras reales
 
         // ============================================
         // INICIALIZACIÓN
@@ -534,7 +530,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             renderProducts();
             updateCartUI();
-            updateCouponBanner();
+            // updateCouponBanner() eliminado
 
             // Cargar desde Sheets si hay URL configurada
             if (CONFIG.SHEETS_URL) {
@@ -774,66 +770,60 @@
 
             const message = `Hola CR Originals, soy [TU NOMBRE] y quiero comprar:%0A%0A${itemsList}%0A%0A💰 Total: ${total} Bs%0A%0APor favor confirmar disponibilidad y costo de envío.`;
 
-            // Registrar compra para cupones
-            purchaseHistory.push({ date: new Date().toISOString(), total: total, items: cart.length });
-            localStorage.setItem('cr_purchases', JSON.stringify(purchaseHistory));
-            updateCouponBanner();
+            const waUrl = `https://wa.me/${CONFIG.WHATSAPP_NUMBER}?text=${message}`;
 
-            // Limpiar carrito
+            // Crear enlace nativo para máxima compatibilidad en móvil
+            const link = document.createElement('a');
+            link.href = waUrl;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Limpiar carrito DESPUÉS de abrir WhatsApp
             cart = [];
             saveCart();
             updateCartUI();
             toggleCart();
-
-            // Usar location.href para evitar "Invalid website" en file://
-            const waUrl = `https://wa.me/${CONFIG.WHATSAPP_NUMBER}?text=${message}`;
-            try {
-                window.open(waUrl, '_blank');
-            } catch(e) {
-                window.location.href = waUrl;
-            }
         }
 
-        // ============================================
-        // CUPONES
-        // ============================================
-        function updateCouponBanner() {
-            const confirmedPurchases = purchaseHistory.length;
-            const banner = document.getElementById('couponBanner');
-            const count = document.getElementById('couponCount');
-
-            if (confirmedPurchases > 0 && confirmedPurchases < 6) {
-                banner.style.display = 'flex';
-                count.textContent = confirmedPurchases;
-            } else if (confirmedPurchases >= 6 && confirmedPurchases % 6 === 0) {
-                banner.innerHTML = '<div class="coupon-banner-text">🎉 <span>¡CUPÓN ACTIVO!</span> Tienes 25% de descuento en tu próxima compra</div>';
-                banner.style.display = 'flex';
-            } else {
-                banner.style.display = 'none';
-            }
-        }
+        
 
         // ============================================
-        // SUGERENCIAS
+        // SUGERENCIAS → WhatsApp
         // ============================================
         function submitSuggestion(e) {
             e.preventDefault();
-            const name = document.getElementById('sugName').value;
-            const phone = document.getElementById('sugPhone').value;
-            const message = document.getElementById('sugMessage').value;
+            const name = document.getElementById('sugName').value.trim();
+            const phone = document.getElementById('sugPhone').value.trim();
+            const message = document.getElementById('sugMessage').value.trim();
 
-            // Aquí se conectaría con Google Sheets via Apps Script
-            // Por ahora simulamos el envío
-            showToast('✅ Sugerencia enviada. ¡Gracias!');
+            if (!name || !message) {
+                showToast('❌ Completa nombre y mensaje');
+                return;
+            }
+
+            // Construir mensaje formateado para WhatsApp
+            const waMessage = `Hola CR Originals, tengo una sugerencia:%0A%0A` +
+                `👤 Nombre: ${name}%0A` +
+                `${phone ? `📱 Teléfono: ${phone}%0A` : ''}` +
+                `💬 Mensaje: ${message}%0A%0A` +
+                `Enviado desde cr-originals.vercel.app`;
+
+            const waUrl = `https://wa.me/${CONFIG.WHATSAPP_NUMBER}?text=${waMessage}`;
+
+            // Abrir WhatsApp con enlace nativo (mismo método confiable que checkout)
+            const link = document.createElement('a');
+            link.href = waUrl;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showToast('📱 Abriendo WhatsApp...');
             document.getElementById('suggestionForm').reset();
-
-            // En producción, descomentar y usar URL de Apps Script:
-            /*
-            fetch('URL_APPS_SCRIPT', {
-                method: 'POST',
-                body: JSON.stringify({ type: 'suggestion', name, phone, message })
-            });
-            */
         }
 
         // ============================================
@@ -851,88 +841,17 @@
         }
 
         // ============================================
-        // GOOGLE SHEETS INTEGRATION
+        // GOOGLE SHEETS INTEGRATION (para futuro)
         // ============================================
-        // Parser CSV robusto: respeta comas dentro de comillas y comillas escapadas ("")
-        function parseCSV(text) {
-            const rows = [];
-            let row = [];
-            let field = '';
-            let inQuotes = false;
-            // Normalizar saltos de línea
-            text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-            for (let i = 0; i < text.length; i++) {
-                const c = text[i];
-                if (inQuotes) {
-                    if (c === '"') {
-                        if (text[i + 1] === '"') { field += '"'; i++; }
-                        else { inQuotes = false; }
-                    } else {
-                        field += c;
-                    }
-                } else {
-                    if (c === '"') {
-                        inQuotes = true;
-                    } else if (c === ',') {
-                        row.push(field); field = '';
-                    } else if (c === '\n') {
-                        row.push(field); field = '';
-                        rows.push(row); row = [];
-                    } else {
-                        field += c;
-                    }
-                }
-            }
-            // Última celda / fila
-            if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
-
-            // Eliminar filas totalmente vacías
-            return rows.filter(r => r.some(c => c && c.trim() !== ''));
-        }
-
-        function csvToProducts(csv) {
-            const rows = parseCSV(csv);
-            if (rows.length < 2) return [];
-            const headers = rows[0].map(h => h.trim().toLowerCase());
-            const out = [];
-            for (let i = 1; i < rows.length; i++) {
-                const r = rows[i];
-                const obj = {};
-                headers.forEach((h, idx) => { obj[h] = (r[idx] !== undefined ? String(r[idx]).trim() : ''); });
-                if (!obj.id && !obj.name) continue;
-                out.push({
-                    id: parseInt(obj.id, 10) || (i),
-                    name: obj.name || 'Producto sin nombre',
-                    category: (obj.category || 'zapatos').toLowerCase(),
-                    brand: obj.brand || '',
-                    size: obj.size || '',
-                    color: obj.color || '',
-                    price: parseFloat(String(obj.price).replace(/[^0-9.\-]/g, '')) || 0,
-                    stock: parseInt(obj.stock, 10) || 0,
-                    image: obj.image || 'https://via.placeholder.com/400x300?text=CR+Originals',
-                    description: obj.description || '',
-                    condition: obj.condition || ''
-                });
-            }
-            return out;
-        }
-
         async function loadFromSheets() {
             try {
-                const response = await fetch(CONFIG.SHEETS_URL, { cache: 'no-store' });
-                if (!response.ok) throw new Error('HTTP ' + response.status);
+                // Sheets publicados como CSV
+                const response = await fetch(CONFIG.SHEETS_URL);
                 const csv = await response.text();
-                const parsed = csvToProducts(csv);
-                if (parsed.length > 0) {
-                    products = parsed;
-                    renderProducts();
-                    console.log('✅ Productos cargados desde Google Sheets:', products.length);
-                } else {
-                    console.warn('⚠️ Sheets vacío o sin datos válidos. Usando datos demo.');
-                }
+                // Parsear CSV y actualizar products
+                console.log('Datos cargados desde Sheets');
             } catch (e) {
-                console.error('❌ Error al cargar Sheets, usando datos demo:', e);
+                console.log('Usando datos demo');
             }
         }
 
@@ -956,6 +875,5 @@
             });
         });
     </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
