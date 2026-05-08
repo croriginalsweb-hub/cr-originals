@@ -291,7 +291,6 @@
                 </div>
             </div>
             <!-- Cupón eliminado: no hay backend para validar compras reales -->
-</div>
 
             <div class="filters">
                 <div class="filter-group">
@@ -462,7 +461,8 @@
         // ============================================
         const CONFIG = {
             WHATSAPP_NUMBER: "59175801814",
-            SHEETS_URL: "", // Dejar vacío para usar datos demo
+            SHEETS_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRZBBsN9cQvhlUuld3Wefsc4ocFu_7J_i4hedTLN8v3-oQ3L7X-XxPO9qjKKD7XvrU-VQUt0ZCLGmsS/pub?output=csv",
+            APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbyPdAyTet73AJaLeyd8xBvbGzuwyt7K0YV-N1LJBt6yyqIBxEWRokUd1MBKqTYMQ91DGg/exec",
             CURRENCY: "Bs",
             FREE_SHIPPING: ["El Alto", "La Paz"],
             HOURS: "14:00 - 00:00"
@@ -804,7 +804,35 @@
                 return;
             }
 
-            // Construir mensaje formateado para WhatsApp
+            // Primero intentar guardar en Google Sheets via Apps Script
+            if (CONFIG.APPS_SCRIPT_URL) {
+                const formData = new FormData();
+                formData.append('type', 'suggestion');
+                formData.append('name', name);
+                formData.append('phone', phone || '');
+                formData.append('message', message);
+                formData.append('timestamp', new Date().toISOString());
+
+                fetch(CONFIG.APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    body: formData,
+                    mode: 'no-cors' // Necesario para Apps Script sin CORS configurado
+                })
+                .then(() => {
+                    showToast('✅ Sugerencia guardada. ¡Gracias!');
+                    document.getElementById('suggestionForm').reset();
+                })
+                .catch(() => {
+                    // Si falla Sheets, fallback a WhatsApp
+                    sendSuggestionToWhatsApp(name, phone, message);
+                });
+            } else {
+                // Si no hay Apps Script configurado, usar WhatsApp
+                sendSuggestionToWhatsApp(name, phone, message);
+            }
+        }
+
+        function sendSuggestionToWhatsApp(name, phone, message) {
             const waMessage = `Hola CR Originals, tengo una sugerencia:%0A%0A` +
                 `👤 Nombre: ${name}%0A` +
                 `${phone ? `📱 Teléfono: ${phone}%0A` : ''}` +
@@ -813,7 +841,6 @@
 
             const waUrl = `https://wa.me/${CONFIG.WHATSAPP_NUMBER}?text=${waMessage}`;
 
-            // Abrir WhatsApp con enlace nativo (mismo método confiable que checkout)
             const link = document.createElement('a');
             link.href = waUrl;
             link.target = '_blank';
@@ -845,14 +872,102 @@
         // ============================================
         async function loadFromSheets() {
             try {
-                // Sheets publicados como CSV
                 const response = await fetch(CONFIG.SHEETS_URL);
                 const csv = await response.text();
-                // Parsear CSV y actualizar products
-                console.log('Datos cargados desde Sheets');
+                const lines = csv.trim().split('\n');
+
+                // El CSV tiene encabezados en fila 1 y datos desde fila 3 (fila 2 es duplicado de encabezados en el Excel)
+                // Formato: id,name,category,brand,size,color,price,stock,image,description,condition
+                const newProducts = [];
+                let headers = [];
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+
+                    const cols = parseCSVLine(line);
+
+                    if (i === 0) {
+                        headers = cols.map(h => h.toLowerCase().trim());
+                        continue;
+                    }
+
+                    // Saltar fila duplicada de encabezados
+                    if (cols[0].toLowerCase() === 'id') continue;
+
+                    // Saltar filas vacías o inválidas
+                    if (!cols[0] || cols[0] === 'id') continue;
+
+                    const product = {};
+                    headers.forEach((h, idx) => {
+                        product[h] = cols[idx] ? cols[idx].trim() : '';
+                    });
+
+                    // Convertir tipos
+                    const parsed = {
+                        id: parseInt(product.id) || newProducts.length + 1,
+                        name: cleanString(product.name) || 'Producto sin nombre',
+                        category: product.category || 'zapatos',
+                        brand: product.brand || 'Sin marca',
+                        size: product.size || '',
+                        color: product.color || '',
+                        price: parseInt(product.price) || 0,
+                        stock: parseInt(product.stock) || 0,
+                        image: product.image || 'https://via.placeholder.com/400x300?text=Sin+Imagen',
+                        description: product.description || '',
+                        condition: product.condition || ''
+                    };
+
+                    if (parsed.name && parsed.name !== 'name') {
+                        newProducts.push(parsed);
+                    }
+                }
+
+                if (newProducts.length > 0) {
+                    products = newProducts;
+                    renderProducts();
+                    console.log('✅ ' + newProducts.length + ' productos cargados desde Google Sheets');
+                } else {
+                    console.log('⚠️ No se encontraron productos válidos en Sheets, usando demo');
+                }
             } catch (e) {
+                console.log('❌ Error cargando Sheets:', e);
                 console.log('Usando datos demo');
             }
+        }
+
+        // Parser CSV simple que maneja comillas
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                const nextChar = line[i + 1];
+
+                if (char === '"') {
+                    if (inQuotes && nextChar === '"') {
+                        current += '"';
+                        i++; // Saltar comilla escapada
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim());
+            return result;
+        }
+
+        // Función para limpiar espacios extra y caracteres raros de strings
+        function cleanString(str) {
+            if (!str) return '';
+            return str.replace(/\s+/g, ' ').trim();
         }
 
         // ============================================
